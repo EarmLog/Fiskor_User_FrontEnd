@@ -3,7 +3,7 @@
 // Los usuarios viven en Supabase; aqui se administran.
 // ============================================================
 import { useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, ShieldCheck } from 'lucide-react'
+import { Plus, Pencil, Trash2, ShieldCheck, Check, X, Clock, UserPlus } from 'lucide-react'
 
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
@@ -33,6 +33,15 @@ export default function Usuarios() {
   const [form, setForm] = useState({ email: '', nombre: '', password: '', rol: 'Cajero' })
   const [guardando, setGuardando] = useState(false)
 
+  // Solicitudes de registro pendientes de aprobacion.
+  const [solicitudes, setSolicitudes] = useState([])
+  const [aprobar, setAprobar] = useState(null) // solicitud que se va a aprobar
+  const [rolAprobar, setRolAprobar] = useState('Cajero')
+  const [procesando, setProcesando] = useState(false)
+  const [mensaje, setMensaje] = useState('')
+
+  const esAdmin = usuario?.rol === 'Administrador'
+
   const cargar = async () => {
     setCargando(true)
     try {
@@ -45,9 +54,56 @@ export default function Usuarios() {
     }
   }
 
+  const cargarSolicitudes = async () => {
+    if (!esAdmin) return
+    try {
+      const { data } = await api.get('/auth/solicitudes', { params: { estado: 'pendiente' } })
+      setSolicitudes(data.datos || [])
+    } catch {
+      // Silencioso: si falla, simplemente no se muestran solicitudes.
+    }
+  }
+
   useEffect(() => {
     cargar()
+    cargarSolicitudes()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const confirmarAprobacion = async () => {
+    if (!aprobar) return
+    setProcesando(true)
+    setError('')
+    try {
+      const { data } = await api.post(`/auth/solicitudes/${aprobar.id}/aprobar`, { rol: rolAprobar })
+      if (!data.exito) {
+        setError(data.mensaje)
+        return
+      }
+      setMensaje(`Usuario "${aprobar.nombre}" aprobado como ${rolAprobar}`)
+      setAprobar(null)
+      cargar()
+      cargarSolicitudes()
+    } catch (err) {
+      setError(err.mensaje || 'No se pudo aprobar la solicitud')
+    } finally {
+      setProcesando(false)
+    }
+  }
+
+  const rechazar = async (solicitud) => {
+    const motivo = window.prompt(`Motivo del rechazo para "${solicitud.nombre}" (opcional):`)
+    if (motivo === null) return
+    try {
+      const { data } = await api.post(`/auth/solicitudes/${solicitud.id}/rechazar`, { motivo })
+      if (data.exito) {
+        setMensaje('Solicitud rechazada')
+        cargarSolicitudes()
+      }
+    } catch (err) {
+      setError(err.mensaje || 'No se pudo rechazar la solicitud')
+    }
+  }
 
   const abrir = (usuario) => {
     setSeleccionado(usuario)
@@ -117,6 +173,42 @@ export default function Usuarios() {
       </div>
 
       {error && <Alerta tipo="error" onCerrar={() => setError('')}>{error}</Alerta>}
+      {mensaje && <Alerta tipo="exito" onCerrar={() => setMensaje('')}>{mensaje}</Alerta>}
+
+      {/* Solicitudes de registro pendientes (solo administrador) */}
+      {esAdmin && solicitudes.length > 0 && (
+        <Tarjeta className="border-amber-200 bg-amber-50/50">
+          <h3 className="mb-3 flex items-center gap-2 font-semibold text-amber-700">
+            <Clock size={18} /> Solicitudes de registro pendientes
+            <Insignia color="amarillo">{solicitudes.length}</Insignia>
+          </h3>
+          <ul className="space-y-2">
+            {solicitudes.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-100 bg-white px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                    <UserPlus size={16} />
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">{s.nombre}</p>
+                    <p className="text-xs text-slate-400">
+                      {s.email}{s.cargo ? ` · ${s.cargo}` : ''}{s.telefono ? ` · ${s.telefono}` : ''}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Boton tamaño="chico" onClick={() => { setAprobar(s); setRolAprobar('Cajero'); setError('') }}>
+                    <Check size={14} /> Aprobar
+                  </Boton>
+                  <Boton peligro tamaño="chico" onClick={() => rechazar(s)}>
+                    <X size={14} /> Rechazar
+                  </Boton>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Tarjeta>
+      )}
 
       {usuarios.length ? (
         <div className="tarjeta overflow-hidden">
@@ -178,6 +270,36 @@ export default function Usuarios() {
             El usuario iniciara sesion con Supabase; sin internet usara la copia local.
           </div>
         </div>
+      </Modal>
+
+      {/* Modal para aprobar una solicitud eligiendo el rol */}
+      <Modal
+        titulo="Aprobar solicitud"
+        abierto={!!aprobar}
+        onCerrar={() => setAprobar(null)}
+        ancho="max-w-sm"
+        acciones={
+          <>
+            <Boton secundario onClick={() => setAprobar(null)}>Cancelar</Boton>
+            <Boton onClick={confirmarAprobacion} disabled={procesando}>
+              {procesando ? 'Aprobando...' : 'Aprobar y crear usuario'}
+            </Boton>
+          </>
+        }
+      >
+        {aprobar && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Se creara la cuenta para <span className="font-medium">{aprobar.nombre}</span> ({aprobar.email}).
+            </p>
+            <Seleccion
+              etiqueta="Rol asignado"
+              value={rolAprobar}
+              onChange={(e) => setRolAprobar(e.target.value)}
+              opciones={ROLES.map((r) => ({ valor: r, texto: r }))}
+            />
+          </div>
+        )}
       </Modal>
     </div>
   )

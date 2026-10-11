@@ -3,7 +3,7 @@
 // Navbar minimalista y tarjeta centrada con el formulario.
 // ============================================================
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Banknote, Eye, EyeOff, Lock, Mail, AlertCircle } from 'lucide-react'
 
 import { useAuth } from '../context/AuthContext'
@@ -104,12 +104,25 @@ export default function Login() {
               </div>
             </div>
 
+            <div className="flex justify-end">
+              <Link to="/recuperar" className="text-xs font-medium text-marca-600 hover:underline">
+                Olvide mi contrasena
+              </Link>
+            </div>
+
             <Boton type="submit" disabled={cargando} className="w-full">
               {cargando ? 'Verificando...' : 'Iniciar sesion'}
             </Boton>
           </form>
 
-          <p className="mt-6 text-center text-xs text-slate-400">
+          <p className="mt-6 text-center text-sm text-slate-500">
+            No tienes cuenta?{' '}
+            <Link to="/registro" className="font-medium text-marca-600 hover:underline">
+              Registrate aqui
+            </Link>
+          </p>
+
+          <p className="mt-4 text-center text-xs text-slate-400">
             La sesion se guarda de forma segura en este equipo.
           </p>
         </div>

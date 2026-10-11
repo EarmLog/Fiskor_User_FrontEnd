@@ -3,10 +3,10 @@
 // Listado con filtros, detalle completo y anulacion.
 // ============================================================
 import { useEffect, useState } from 'react'
-import { Eye, Receipt, Ban, Search, FileText } from 'lucide-react'
+import { Eye, Receipt, Ban, Search, FileText, FileDown, Printer } from 'lucide-react'
 
 import { useApp } from '../context/AppContext'
-import { api } from '../services/api'
+import { api, descargarArchivo } from '../services/api'
 import {
   Alerta,
   Boton,
@@ -29,6 +29,8 @@ export default function Ventas() {
   const [cargando, setCargando] = useState(true)
   const [detalle, setDetalle] = useState(null)
   const [error, setError] = useState('')
+  const [mensaje, setMensaje] = useState('')
+  const [ocupado, setOcupado] = useState(0)
 
   const cargar = async () => {
     setCargando(true)
@@ -67,6 +69,45 @@ export default function Ventas() {
       cargar()
     } catch (err) {
       setError(err.mensaje || 'No se pudo anular la venta')
+    }
+  }
+
+  // Descarga el documento generado por el backend (PDF o Word).
+  const descargarDocumento = async (venta, tipo) => {
+    setError('')
+    setMensaje('')
+    setOcupado(venta.id)
+    try {
+      const { data } = await api.get(`/ventas/${venta.id}/${tipo}`)
+      if (!data.exito) {
+        setError(data.mensaje)
+        return
+      }
+      const { categoria, nombre } = data.datos
+      await descargarArchivo(categoria, nombre)
+    } catch (err) {
+      setError(err.mensaje || 'No se pudo generar el documento')
+    } finally {
+      setOcupado(0)
+    }
+  }
+
+  // Envia la venta a la impresora fiscal (SENIAT) si esta configurada.
+  const imprimirFiscal = async (venta) => {
+    setError('')
+    setMensaje('')
+    setOcupado(venta.id)
+    try {
+      const { data } = await api.post(`/ventas/${venta.id}/fiscal`)
+      if (!data.exito) {
+        setError(data.mensaje)
+        return
+      }
+      setMensaje(data.mensaje)
+    } catch (err) {
+      setError(err.mensaje || 'No se pudo emitir el documento fiscal')
+    } finally {
+      setOcupado(0)
     }
   }
 
@@ -112,6 +153,7 @@ export default function Ventas() {
       </div>
 
       {error && <Alerta tipo="error" onCerrar={() => setError('')}>{error}</Alerta>}
+      {mensaje && <Alerta tipo="exito" onCerrar={() => setMensaje('')}>{mensaje}</Alerta>}
 
       <Entrada
         icono={Search}
@@ -137,6 +179,9 @@ export default function Ventas() {
               ],
               acciones: [
                 { icono: Eye, titulo: 'Ver detalle', color: 'azul', onClick: () => verDetalle(venta) },
+                { icono: FileDown, titulo: 'Descargar PDF', color: 'verde', onClick: () => descargarDocumento(venta, 'pdf') },
+                { icono: FileText, titulo: 'Descargar Word', color: 'azul', onClick: () => descargarDocumento(venta, 'word') },
+                { icono: Printer, titulo: 'Imprimir en fiscal', color: 'ambar', onClick: () => imprimirFiscal(venta) },
                 ...(venta.estado === 'emitida'
                   ? [{ icono: Ban, titulo: 'Anular', color: 'rojo', onClick: () => anular(venta) }]
                   : []),
@@ -231,6 +276,18 @@ export default function Ventas() {
                 <span>Total Bs.</span><span>{formatoBs(detalle.total_bolivares)}</span>
               </div>
               <p className="pt-1 text-xs text-slate-400">Tasa aplicada: Bs. {detalle.tasa_aplicada}</p>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+              <Boton secundario onClick={() => descargarDocumento(detalle, 'word')} disabled={ocupado === detalle.id}>
+                <FileText size={16} /> Word
+              </Boton>
+              <Boton secundario onClick={() => descargarDocumento(detalle, 'pdf')} disabled={ocupado === detalle.id}>
+                <FileDown size={16} /> PDF
+              </Boton>
+              <Boton onClick={() => imprimirFiscal(detalle)} disabled={ocupado === detalle.id}>
+                <Printer size={16} /> {ocupado === detalle.id ? 'Procesando...' : 'Imprimir fiscal'}
+              </Boton>
             </div>
           </div>
         )}

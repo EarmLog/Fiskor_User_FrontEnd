@@ -4,10 +4,10 @@
 // divisas en efectivo y doble moneda (Bolivares y USD).
 // ============================================================
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Trash2, Search, ShoppingCart, CheckCircle2, User } from 'lucide-react'
+import { Plus, Trash2, Search, ShoppingCart, CheckCircle2, User, FileDown, Printer } from 'lucide-react'
 
 import { useApp } from '../context/AppContext'
-import { api } from '../services/api'
+import { api, descargarArchivo } from '../services/api'
 import { Alerta, Boton, Cargando, Entrada, Insignia, Modal, Seleccion } from '../components/ui'
 import { Monto } from '../components/ui'
 
@@ -28,6 +28,8 @@ export default function POS() {
   const [creado, setCreado] = useState(null) // venta registrada con exito
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const [ocupado, setOcupado] = useState(false)
+  const [avisoDoc, setAvisoDoc] = useState('')
 
   const cargarBase = async () => {
     setCargando(true)
@@ -214,6 +216,36 @@ export default function POS() {
       setError(err.mensaje || 'No se pudo registrar la venta')
     } finally {
       setGuardando(false)
+    }
+  }
+
+  // Genera y descarga el documento de una venta (PDF o Word).
+  const descargarDocumento = async (venta, tipo) => {
+    if (!venta?.id) return
+    setAvisoDoc('')
+    setOcupado(true)
+    try {
+      const { data } = await api.get(`/ventas/${venta.id}/${tipo}`)
+      if (data.exito) await descargarArchivo(data.datos.categoria, data.datos.nombre)
+    } catch (err) {
+      setAvisoDoc(err.mensaje || 'No se pudo generar el documento')
+    } finally {
+      setOcupado(false)
+    }
+  }
+
+  // Envia la venta a la impresora fiscal si esta configurada.
+  const imprimirFiscal = async (venta) => {
+    if (!venta?.id) return
+    setAvisoDoc('')
+    setOcupado(true)
+    try {
+      const { data } = await api.post(`/ventas/${venta.id}/fiscal`)
+      setAvisoDoc(data.exito ? data.mensaje : data.mensaje || 'No se pudo emitir el documento fiscal')
+    } catch (err) {
+      setAvisoDoc(err.mensaje || 'No se pudo emitir el documento fiscal')
+    } finally {
+      setOcupado(false)
     }
   }
 
@@ -507,6 +539,20 @@ export default function POS() {
           <p className="mt-1 text-sm text-slate-500">
             Numero de factura: <span className="font-semibold">{creado?.numero_factura}</span>
           </p>
+
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <Boton secundario onClick={() => descargarDocumento(creado, 'pdf')} disabled={ocupado}>
+              <FileDown size={16} /> PDF
+            </Boton>
+            <Boton secundario onClick={() => descargarDocumento(creado, 'word')} disabled={ocupado}>
+              <FileDown size={16} /> Word
+            </Boton>
+            <Boton onClick={() => imprimirFiscal(creado)} disabled={ocupado}>
+              <Printer size={16} /> Imprimir fiscal
+            </Boton>
+          </div>
+          {avisoDoc && <p className="mt-3 text-xs text-slate-500">{avisoDoc}</p>}
+          <Boton className="mt-4 w-full" onClick={() => setCreado(null)}>Nueva venta</Boton>
         </div>
       </Modal>
     </div>

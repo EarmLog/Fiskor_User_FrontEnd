@@ -56,3 +56,39 @@ api.interceptors.response.use(
     return Promise.reject(error)
   },
 )
+
+// ------------------------------------------------------------
+// Utilidades de archivos (subir y descargar)
+// ------------------------------------------------------------
+
+// Sube una imagen (logo, sello o firma) de una empresa.
+export const subirImagenEmpresa = (empresaId, tipo, archivo) => {
+  const datos = new FormData()
+  datos.append('archivo', archivo)
+  return api.post(`/empresa/${empresaId}/imagenes/${tipo}`, datos, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+// Construye la URL publica de una imagen corporativa.
+export const urlImagenEmpresa = (empresaId, tipo, marcaTiempo = '') => {
+  if (!empresaId) return ''
+  const sufijo = marcaTiempo ? `?t=${marcaTiempo}` : ''
+  return `/api/empresa/${empresaId}/imagenes/${tipo}${sufijo}`
+}
+
+// Descarga un archivo generado por el backend (Excel/PDF/Word).
+// Usamos el token de sesion en la cabecera y disparamos la descarga.
+export const descargarArchivo = async (categoria, nombre, nombreDescarga) => {
+  const respuesta = await api.get(`/descargas/${categoria}/${encodeURIComponent(nombre)}`, {
+    responseType: 'blob',
+  })
+  const url = window.URL.createObjectURL(new Blob([respuesta.data]))
+  const enlace = document.createElement('a')
+  enlace.href = url
+  enlace.download = nombreDescarga || nombre
+  document.body.appendChild(enlace)
+  enlace.click()
+  enlace.remove()
+  window.URL.revokeObjectURL(url)
+}

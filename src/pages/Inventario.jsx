@@ -1,11 +1,11 @@
 // ============================================================
 // Inventario: productos, categorias y ajustes de stock.
 // ============================================================
-import { useEffect, useState } from 'react'
-import { Package, Plus, Search, Pencil, Trash2, Tags, SlidersHorizontal, PackagePlus } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Package, Plus, Search, Pencil, Trash2, Tags, SlidersHorizontal, PackagePlus, Upload, Download, FileSpreadsheet, CheckCircle2, X } from 'lucide-react'
 
 import { useApp } from '../context/AppContext'
-import { api } from '../services/api'
+import { api, descargarArchivo } from '../services/api'
 import {
   Alerta,
   Boton,
@@ -44,7 +44,16 @@ export default function Inventario() {
   const [modal, setModal] = useState(null) // 'nuevo' | 'editar' | 'categorias' | 'ajuste'
   const [seleccionado, setSeleccionado] = useState(null)
   const [error, setError] = useState('')
+  const [mensaje, setMensaje] = useState('')
   const [guardando, setGuardando] = useState(false)
+
+  // Importacion/exportacion de Excel
+  const [archivoImportar, setArchivoImportar] = useState(null)
+  const [importando, setImportando] = useState(false)
+  const [resultadoImport, setResultadoImport] = useState(null)
+  const [arrastrando, setArrastrando] = useState(false)
+  const [exportando, setExportando] = useState(false)
+  const inputArchivoRef = useRef(null)
 
   // Formulario del producto
   const [productoForm, setProductoForm] = useState({
@@ -78,6 +87,73 @@ export default function Inventario() {
   useEffect(() => {
     cargar()
   }, [])
+
+  const exportarExcel = async () => {
+    setError('')
+    setMensaje('')
+    setExportando(true)
+    try {
+      const { data } = await api.get('/inventario/exportar')
+      if (!data.exito) {
+        setError(data.mensaje)
+        return
+      }
+      // El backend devuelve la ruta absoluta; extraemos el nombre del archivo.
+      const nombre = String(data.datos.archivo).split(/[\\/]/).pop()
+      await descargarArchivo('excel', nombre, `inventario_${new Date().toISOString().slice(0, 10)}.xlsx`)
+      setMensaje('Inventario exportado correctamente')
+    } catch (err) {
+      setError(err.mensaje || 'No se pudo exportar el inventario')
+    } finally {
+      setExportando(false)
+    }
+  }
+
+  const abrirImportar = () => {
+    setArchivoImportar(null)
+    setResultadoImport(null)
+    setError('')
+    setModal('importar')
+  }
+
+  const seleccionarArchivo = (archivo) => {
+    if (!archivo) return
+    if (!/\.(xlsx|xls)$/i.test(archivo.name)) {
+      setError('El archivo debe ser un Excel (.xlsx o .xls)')
+      return
+    }
+    setError('')
+    setResultadoImport(null)
+    setArchivoImportar(archivo)
+  }
+
+  const importarExcel = async () => {
+    if (!archivoImportar) {
+      setError('Seleccione un archivo Excel')
+      return
+    }
+    setError('')
+    setMensaje('')
+    setImportando(true)
+    try {
+      const datos = new FormData()
+      datos.append('archivo', archivoImportar)
+      const { data } = await api.post('/inventario/importar', datos, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      if (!data.exito) {
+        setError(data.mensaje)
+        return
+      }
+      setResultadoImport(data.datos)
+      cargar()
+      recargarTodo()
+    } catch (err) {
+      setError(err.mensaje || 'No se pudo importar el archivo')
+    } finally {
+      setImportando(false)
+    }
+  }
 
   const abrirNuevo = () => {
     setProductoForm({
@@ -231,7 +307,13 @@ export default function Inventario() {
           <h2 className="text-xl font-bold text-slate-800">Inventario</h2>
           <p className="text-sm text-slate-500">Productos, categorias y stock</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Boton secundario onClick={exportarExcel} disabled={exportando}>
+            <Download size={16} /> {exportando ? 'Generando...' : 'Exportar'}
+          </Boton>
+          <Boton secundario onClick={abrirImportar}>
+            <Upload size={16} /> Importar
+          </Boton>
           <Boton secundario onClick={() => setModal('categorias')}>
             <Tags size={16} /> Categorias
           </Boton>
@@ -243,6 +325,9 @@ export default function Inventario() {
 
       {error && (
         <Alerta tipo="error" onCerrar={() => setError('')}>{error}</Alerta>
+      )}
+      {mensaje && (
+        <Alerta tipo="exito" onCerrar={() => setMensaje('')}>{mensaje}</Alerta>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -398,6 +483,82 @@ export default function Inventario() {
           <Entrada etiqueta="Cantidad" type="number" value={ajuste.cantidad} onChange={(e) => setAjuste({ ...ajuste, cantidad: e.target.value })} />
           <Entrada etiqueta="Motivo" value={ajuste.motivo} onChange={(e) => setAjuste({ ...ajuste, motivo: e.target.value })} />
         </div>
+      </Modal>
+
+      {/* ===== Modal de importacion desde Excel ===== */}
+      <Modal
+        titulo="Importar productos desde Excel"
+        abierto={modal === 'importar'}
+        onCerrar={() => setModal(null)}
+        ancho="max-w-lg"
+        acciones={
+          <>
+            <Boton secundario onClick={() => setModal(null)}>Cerrar</Boton>
+            <Boton onClick={importarExcel} disabled={importando || !archivoImportar}>
+              <Upload size={16} /> {importando ? 'Importando...' : 'Importar'}
+            </Boton>
+          </>
+        }
+      >
+        {!resultadoImport ? (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-500">
+              El archivo debe tener al menos las columnas <span className="font-medium">Codigo</span> y{' '}
+              <span className="font-medium">Nombre</span>. Tambien se leen: Costo USD, Precio USD, Stock y Stock minimo.
+            </p>
+
+            <label
+              onDragOver={(e) => { e.preventDefault(); setArrastrando(true) }}
+              onDragLeave={() => setArrastrando(false)}
+              onDrop={(e) => { e.preventDefault(); setArrastrando(false); seleccionarArchivo(e.dataTransfer.files?.[0]) }}
+              className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-10 text-center transition-colors ${
+                arrastrando ? 'border-marca-400 bg-marca-50' : 'border-slate-300 bg-slate-50 hover:border-marca-300'
+              }`}
+            >
+              <input
+                ref={inputArchivoRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={(e) => seleccionarArchivo(e.target.files?.[0])}
+              />
+              <FileSpreadsheet className="text-marca-500" size={32} />
+              <p className="text-sm font-medium text-slate-700">Arrastra el Excel aqui o haz clic para elegir</p>
+              <p className="text-xs text-slate-400">Formatos: .xlsx, .xls</p>
+            </label>
+
+            {archivoImportar && (
+              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm">
+                <span className="flex items-center gap-2 text-slate-600">
+                  <FileSpreadsheet size={16} className="text-emerald-500" />
+                  {archivoImportar.name}
+                </span>
+                <button onClick={() => setArchivoImportar(null)} className="text-slate-400 hover:text-red-500" aria-label="Quitar archivo">
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4 text-center">
+            <CheckCircle2 className="mx-auto text-emerald-500" size={44} />
+            <p className="font-semibold text-slate-800">Importacion finalizada</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg bg-emerald-50 px-3 py-3">
+                <p className="text-2xl font-bold text-emerald-700">{resultadoImport.creados}</p>
+                <p className="text-xs text-emerald-600">Creados</p>
+              </div>
+              <div className="rounded-lg bg-sky-50 px-3 py-3">
+                <p className="text-2xl font-bold text-sky-700">{resultadoImport.actualizados}</p>
+                <p className="text-xs text-sky-600">Actualizados</p>
+              </div>
+              <div className="rounded-lg bg-amber-50 px-3 py-3">
+                <p className="text-2xl font-bold text-amber-700">{resultadoImport.errores}</p>
+                <p className="text-xs text-amber-600">Con errores</p>
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* ===== Modal de categorias ===== */}

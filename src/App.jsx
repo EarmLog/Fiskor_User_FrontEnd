@@ -8,6 +8,9 @@ import Layout from './components/Layout'
 import { useAuth } from './context/AuthContext'
 
 import Login from './pages/Login'
+import Registro from './pages/Registro'
+import Recuperar from './pages/Recuperar'
+import Restablecer from './pages/Restablecer'
 import Dashboard from './pages/Dashboard'
 import POS from './pages/POS'
 import Inventario from './pages/Inventario'
@@ -20,6 +23,7 @@ import Nomina from './pages/Nomina'
 import Fiscal from './pages/Fiscal'
 import Usuarios from './pages/Usuarios'
 import Empresa from './pages/Empresa'
+import Documentos from './pages/Documentos'
 import Reportes from './pages/Reportes'
 import Auditoria from './pages/Auditoria'
 
@@ -35,6 +39,9 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={!token ? <Login /> : <Navigate to="/" replace />} />
+      <Route path="/registro" element={!token ? <Registro /> : <Navigate to="/" replace />} />
+      <Route path="/recuperar" element={!token ? <Recuperar /> : <Navigate to="/" replace />} />
+      <Route path="/restablecer" element={!token ? <Restablecer /> : <Navigate to="/" replace />} />
 
       <Route
         path="/"
@@ -56,6 +63,7 @@ export default function App() {
         <Route path="fiscal" element={<Fiscal />} />
         <Route path="usuarios" element={<Usuarios />} />
         <Route path="empresa" element={<Empresa />} />
+        <Route path="documentos" element={<Documentos />} />
         <Route path="reportes" element={<Reportes />} />
         <Route path="auditoria" element={<Auditoria />} />
       </Route>

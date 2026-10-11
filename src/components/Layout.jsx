@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Building2,
   FileBarChart,
+  FileText,
   History,
   LogOut,
   Menu,
@@ -62,6 +63,7 @@ export default function Layout() {
         { ruta: '/inventario', etiqueta: 'Inventario', icono: Boxes },
         { ruta: '/ventas', etiqueta: 'Ventas y Facturas', icono: Receipt },
         { ruta: '/compras', etiqueta: 'Compras', icono: Truck },
+        { ruta: '/documentos', etiqueta: 'Formatos', icono: FileText },
       ],
     },
     {

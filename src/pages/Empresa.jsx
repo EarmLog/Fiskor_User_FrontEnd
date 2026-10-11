@@ -2,11 +2,11 @@
 // Configuracion de la empresa y de la tasa de cambio.
 // Datos fiscales, parametros y gestion de la tasa BCV.
 // ============================================================
-import { useEffect, useState } from 'react'
-import { Building2, Save, RefreshCw, Percent, Landmark } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Building2, Save, RefreshCw, Percent, Landmark, Image as ImageIcon, Upload, Trash2, PenLine, Palette } from 'lucide-react'
 
 import { useApp } from '../context/AppContext'
-import { api } from '../services/api'
+import { api, subirImagenEmpresa, urlImagenEmpresa } from '../services/api'
 import {
   Alerta,
   Boton,
@@ -15,6 +15,84 @@ import {
   Insignia,
   Tarjeta,
 } from '../components/ui'
+
+// Tarjeta reutilizable para subir/reemplazar una imagen corporativa.
+function ImagenCorporativa({ empresaId, tipo, titulo, descripcion, existente, version, onSubida, onBorrada }) {
+  const [subiendo, setSubiendo] = useState(false)
+  const [error, setError] = useState('')
+  const entradaRef = useRef(null)
+
+  const escoger = () => entradaRef.current?.click()
+
+  const manejarArchivo = async (e) => {
+    const archivo = e.target.files?.[0]
+    if (!archivo) return
+    setError('')
+    setSubiendo(true)
+    try {
+      await subirImagenEmpresa(empresaId, tipo, archivo)
+      onSubida()
+    } catch (err) {
+      setError(err.mensaje || 'No se pudo subir la imagen')
+    } finally {
+      setSubiendo(false)
+      if (entradaRef.current) entradaRef.current.value = ''
+    }
+  }
+
+  const borrar = async () => {
+    if (!window.confirm(`Quitar ${titulo.toLowerCase()}?`)) return
+    try {
+      await api.delete(`/empresa/${empresaId}/imagenes/${tipo}`)
+      onBorrada()
+    } catch (err) {
+      setError(err.mensaje || 'No se pudo quitar la imagen')
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-slate-700">{titulo}</p>
+          <p className="text-xs text-slate-400">{descripcion}</p>
+        </div>
+        {existente && <Insignia color="verde">Cargado</Insignia>}
+      </div>
+
+      <div className="flex h-28 items-center justify-center overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-50">
+        {existente ? (
+          <img
+            src={urlImagenEmpresa(empresaId, tipo, version)}
+            alt={titulo}
+            className="max-h-full max-w-full object-contain p-2"
+            onError={(e) => { e.currentTarget.style.display = 'none' }}
+          />
+        ) : (
+          <div className="flex flex-col items-center gap-1 text-slate-300">
+            <ImageIcon size={26} />
+            <span className="text-xs">Sin imagen</span>
+          </div>
+        )}
+      </div>
+
+      {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+
+      <input ref={entradaRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={manejarArchivo} />
+
+      <div className="mt-3 flex gap-2">
+        <Boton secundario tamaño="chico" className="flex-1" onClick={escoger} disabled={subiendo}>
+          <Upload size={14} /> {subiendo ? 'Subiendo...' : existente ? 'Reemplazar' : 'Subir'}
+        </Boton>
+        {existente && (
+          <Boton peligro tamaño="chico" onClick={borrar}>
+            <Trash2 size={14} />
+          </Boton>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export default function Empresa() {
   const { empresa, tasa, tasaDatos, recargarTodo } = useApp()
@@ -25,6 +103,8 @@ export default function Empresa() {
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje] = useState('')
   const [error, setError] = useState('')
+  const [imagenes, setImagenes] = useState({ logo: false, sello: false, firma: false })
+  const [versiones, setVersiones] = useState({ logo: '', sello: '', firma: '' })
 
   const cargar = async () => {
     setCargando(true)
@@ -47,8 +127,18 @@ export default function Empresa() {
         porcentaje_igtf: datos.porcentaje_igtf ?? 3,
         inicio_ejercicio: datos.inicio_ejercicio || '',
         cierre_ejercicio: datos.cierre_ejercicio || '',
+        firma_nombre: datos.firma_nombre || '',
+        firma_cargo: datos.firma_cargo || '',
+        color_marca: datos.color_marca || '#1d4ed8',
+        pie_documento: datos.pie_documento || '',
         id: datos.id,
       })
+      setImagenes({
+        logo: !!datos.tiene_logo,
+        sello: !!datos.tiene_sello,
+        firma: !!datos.tiene_firma,
+      })
+      setVersiones({ logo: Date.now(), sello: Date.now(), firma: Date.now() })
       setHistorial(respHistorial.data.datos || [])
     } finally {
       setCargando(false)
@@ -59,6 +149,11 @@ export default function Empresa() {
     cargar()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const marcarImagen = (tipo, presente) => {
+    setImagenes((prev) => ({ ...prev, [tipo]: presente }))
+    setVersiones((prev) => ({ ...prev, [tipo]: Date.now() }))
+  }
 
   const guardar = async () => {
     setError('')
@@ -243,6 +338,67 @@ export default function Empresa() {
           </Tarjeta>
         </div>
       </div>
+
+      {/* Imagen corporativa: logo, sello digital y firma autorizada */}
+      <Tarjeta>
+        <h3 className="mb-1 flex items-center gap-2 font-semibold text-slate-800">
+          <ImageIcon size={18} /> Imagen corporativa e identidad
+        </h3>
+        <p className="mb-4 text-sm text-slate-500">
+          Estas imagenes se estampan en facturas, notas de entrega y reportes. El sello y la firma se colocan al pie del documento.
+        </p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <ImagenCorporativa
+            empresaId={form.id}
+            tipo="logo"
+            titulo="Logo"
+            descripcion="Esquina superior, PNG con fondo transparente"
+            existente={imagenes.logo}
+            version={versiones.logo}
+            onSubida={() => marcarImagen('logo', true)}
+            onBorrada={() => marcarImagen('logo', false)}
+          />
+          <ImagenCorporativa
+            empresaId={form.id}
+            tipo="sello"
+            titulo="Sello digital"
+            descripcion="Estampado al pie, junto a la firma"
+            existente={imagenes.sello}
+            version={versiones.sello}
+            onSubida={() => marcarImagen('sello', true)}
+            onBorrada={() => marcarImagen('sello', false)}
+          />
+          <ImagenCorporativa
+            empresaId={form.id}
+            tipo="firma"
+            titulo="Firma autorizada"
+            descripcion="Firma del representante legal"
+            existente={imagenes.firma}
+            version={versiones.firma}
+            onSubida={() => marcarImagen('firma', true)}
+            onBorrada={() => marcarImagen('firma', false)}
+          />
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Entrada etiqueta="Nombre del firmante" value={form.firma_nombre} onChange={(e) => setForm({ ...form, firma_nombre: e.target.value })} placeholder="Que aparece bajo la firma" />
+          <Entrada etiqueta="Cargo del firmante" value={form.firma_cargo} onChange={(e) => setForm({ ...form, firma_cargo: e.target.value })} placeholder="Gerente General" />
+          <div>
+            <label className="etiqueta flex items-center gap-1"><Palette size={13} /> Color de marca (documentos)</label>
+            <input type="color" className="h-10 w-full cursor-pointer rounded-lg border border-slate-200" value={form.color_marca} onChange={(e) => setForm({ ...form, color_marca: e.target.value })} />
+          </div>
+          <div>
+            <label className="etiqueta flex items-center gap-1"><PenLine size={13} /> Pie de documento</label>
+            <textarea className="campo" rows="1" value={form.pie_documento} onChange={(e) => setForm({ ...form, pie_documento: e.target.value })} placeholder="Gracias por su preferencia" />
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end">
+          <Boton onClick={guardar} disabled={guardando}>
+            <Save size={16} /> {guardando ? 'Guardando...' : 'Guardar identidad'}
+          </Boton>
+        </div>
+      </Tarjeta>
     </div>
   )
 }
