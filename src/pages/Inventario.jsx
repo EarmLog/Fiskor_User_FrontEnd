@@ -6,6 +6,8 @@ import { Package, Plus, Search, Pencil, Trash2, Tags, SlidersHorizontal, Package
 
 import { useApp } from '../context/AppContext'
 import { api, descargarArchivo } from '../services/api'
+import { exportarExcelTabla, importarExcelTabla } from '../services/excel'
+import ExcelActions from '../components/ExcelActions'
 import {
   Alerta,
   Boton,
@@ -308,12 +310,40 @@ export default function Inventario() {
           <p className="text-sm text-slate-500">Productos, categorias y stock</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Boton secundario onClick={exportarExcel} disabled={exportando}>
-            <Download size={16} /> {exportando ? 'Generando...' : 'Exportar'}
-          </Boton>
-          <Boton secundario onClick={abrirImportar}>
-            <Upload size={16} /> Importar
-          </Boton>
+          <ExcelActions
+            tabla="productos"
+            exportando={exportando}
+            importando={importando}
+            onExportar={async () => {
+              setExportando(true)
+              try {
+                await exportarExcelTabla('productos', `productos_${new Date().toISOString().slice(0,10)}.xlsx`)
+                setMensaje('Productos exportados a Excel')
+              } catch (e) {
+                setError(e.mensaje || 'No se pudo exportar')
+              } finally {
+                setExportando(false)
+              }
+            }}
+            onImportar={async (archivo) => {
+              setImportando(true)
+              setError('')
+              setMensaje('')
+              try {
+                const res = await importarExcelTabla('productos', archivo)
+                if (res.exito) {
+                  setMensaje(`Importados/actualizados: ${res.datos.procesados}`)
+                  cargar()
+                } else {
+                  setError(res.mensaje)
+                }
+              } catch (e) {
+                setError(e.mensaje || 'No se pudo importar')
+              } finally {
+                setImportando(false)
+              }
+            }}
+          />
           <Boton secundario onClick={() => setModal('categorias')}>
             <Tags size={16} /> Categorias
           </Boton>
