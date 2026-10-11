@@ -1,0 +1,16 @@
+# Dependencias
+node_modules/
+
+# Build
+dist/
+dist-ssr/
+
+# Archivos del entorno
+.env
+.env.local
+
+# Sistema operativo
+.DS_Store
+
+# Vite
+*.local
