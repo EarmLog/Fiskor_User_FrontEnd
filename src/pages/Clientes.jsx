@@ -7,6 +7,8 @@ import { Plus, Search, Pencil, Users, HandCoins, Ban, BadgeDollarSign } from 'lu
 
 import { useApp } from '../context/AppContext'
 import { api } from '../services/api'
+import { exportarExcelTabla, importarExcelTabla } from '../services/excel'
+import ExcelActions from '../components/ExcelActions'
 import {
   Alerta,
   Boton,
@@ -46,6 +48,8 @@ export default function Clientes() {
   const [seleccionado, setSeleccionado] = useState(null)
   const [form, setForm] = useState(VACIO)
   const [guardando, setGuardando] = useState(false)
+  const [exportando, setExportando] = useState(false)
+  const [importando, setImportando] = useState(false)
 
   const [abono, setAbono] = useState(null) // cuenta de CxC para abonar
   const [montoAbono, setMontoAbono] = useState('')
@@ -202,9 +206,40 @@ export default function Clientes() {
               onChange={(e) => setBusqueda(e.target.value)}
               className="w-full sm:max-w-xs"
             />
-            <Boton onClick={() => abrir(null)}>
-              <Plus size={16} /> Nuevo cliente
-            </Boton>
+            <div className="flex gap-2">
+              <ExcelActions
+                tabla="clientes"
+                exportando={exportando}
+                importando={importando}
+                onExportar={async () => {
+                  setExportando(true)
+                  setError('')
+                  try {
+                    await exportarExcelTabla('clientes', `clientes_${new Date().toISOString().slice(0,10)}.xlsx`)
+                  } catch (e) {
+                    setError(e.mensaje || 'No se pudo exportar')
+                  } finally {
+                    setExportando(false)
+                  }
+                }}
+                onImportar={async (archivo) => {
+                  setImportando(true)
+                  setError('')
+                  try {
+                    const res = await importarExcelTabla('clientes', archivo)
+                    if (res.exito) cargar()
+                    else setError(res.mensaje)
+                  } catch (e) {
+                    setError(e.mensaje || 'No se pudo importar')
+                  } finally {
+                    setImportando(false)
+                  }
+                }}
+              />
+              <Boton onClick={() => abrir(null)}>
+                <Plus size={16} /> Nuevo cliente
+              </Boton>
+            </div>
           </div>
 
           {clientesFiltrados.length ? (
