@@ -1,9 +1,9 @@
 // ============================================================
 // Vista publica: registro de usuario.
-// La cuenta queda pendiente hasta que un administrador la apruebe.
+// Al crear la cuenta se redirige al inicio de sesion.
 // ============================================================
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Lock, Mail, User, BadgeCheck, Phone, Briefcase } from 'lucide-react'
 
 import { api } from '../services/api'
@@ -11,6 +11,7 @@ import PublicShell from '../components/PublicShell'
 import { Alerta, Boton, Entrada } from '../components/ui'
 
 export default function Registro() {
+  const navegar = useNavigate()
   const [form, setForm] = useState({ nombre: '', email: '', cargo: '', telefono: '', password: '', confirmar: '' })
   const [mostrarClave, setMostrarClave] = useState(false)
   const [error, setError] = useState('')
@@ -19,6 +20,13 @@ export default function Registro() {
   const [cargando, setCargando] = useState(false)
 
   const cambiar = (campo) => (e) => setForm({ ...form, [campo]: e.target.value })
+
+  // Al crearse la cuenta llevamos al usuario al inicio de sesion.
+  useEffect(() => {
+    if (!creado) return undefined
+    const temporizador = setTimeout(() => navegar('/login'), 2500)
+    return () => clearTimeout(temporizador)
+  }, [creado, navegar])
 
   const enviar = async (e) => {
     e.preventDefault()
@@ -56,7 +64,7 @@ export default function Registro() {
   }
 
   return (
-    <PublicShell titulo="Crear una cuenta" subtitulo="Tu solicitud sera revisada por un administrador">
+    <PublicShell titulo="Crear una cuenta" subtitulo="Crea tu cuenta y empieza a usar tu propio negocio">
       {error && <div className="mb-4"><Alerta tipo="error" onCerrar={() => setError('')}>{error}</Alerta></div>}
       {exito && <div className="mb-4"><Alerta tipo="exito" onCerrar={() => setExito('')}>{exito}</Alerta></div>}
 
@@ -94,7 +102,7 @@ export default function Registro() {
         <Entrada etiqueta="Confirmar contrasena" icono={BadgeCheck} type={mostrarClave ? 'text' : 'password'} placeholder="Repite la contrasena" value={form.confirmar} onChange={cambiar('confirmar')} autoComplete="new-password" />
 
         <Boton type="submit" disabled={cargando} className="w-full">
-          {cargando ? 'Enviando...' : 'Enviar solicitud'}
+          {cargando ? 'Creando cuenta...' : 'Crear cuenta'}
         </Boton>
       </form>
 

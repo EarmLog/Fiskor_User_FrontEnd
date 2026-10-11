@@ -159,7 +159,15 @@ export default function Reportes() {
                 <Download size={16} className="text-slate-400" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-slate-700">{r.nombre_archivo}</p>
-                  <p className="truncate text-xs text-slate-400">{r.ruta}</p>
+                  <p className="truncate text-xs text-slate-400">
+                    {r.drive_link ? (
+                      <a href={r.drive_link} target="_blank" rel="noopener noreferrer" className="text-marca-600 hover:underline">
+                        Enviado a Google Drive
+                      </a>
+                    ) : (
+                      r.ruta
+                    )}
+                  </p>
                 </div>
                 <Insignia color="azul">{tamano(r.tamano_bytes)}</Insignia>
                 <span className="hidden text-xs text-slate-400 sm:block">{r.generado_por}</span>
